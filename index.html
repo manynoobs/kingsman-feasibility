@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開店可行性計算器</title>
+<style>
+:root{
+  /* warm graphite ramp (cutting table: chalk, cloth, ink) */
+  --bg:#f4f3ef; --card:#ffffff; --raise:#f8f7f4; --line:rgba(29,33,31,.09); --line2:rgba(29,33,31,.16);
+  --ink:#1d211f; --soft:#555b57; --mute:#6c726e;
+  --accent:#1f4d36; --accent-soft:#e6eee9; --chalk:#9c7a3c;
+  --good:#2c7049; --warn:#8f6312; --bad:#ad3d2e;
+  --ease:cubic-bezier(.2,.7,.2,1); --r-card:14px; --r-ctl:8px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num,.kpi .v,.val,.tot,.amt,.list span:last-child,.dlg td:last-child,.tiers td{font-variant-numeric:tabular-nums}
+.wrap{max-width:1280px;margin:0 auto;padding:32px 24px 64px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px}
+h1{margin:0;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--soft);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px}
+.seg button{border:0;background:none;padding:6px 12px;border-radius:6px;font-size:13px;color:var(--soft);transition:background-color .15s var(--ease),color .15s var(--ease)}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--accent);color:#fff}
+.ghost{border:1px solid var(--line2);background:var(--card);border-radius:var(--r-ctl);padding:8px 12px;font-size:13px;color:var(--soft);transition:color .15s var(--ease)}
+.ghost:hover{color:var(--ink)}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.kpi{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:20px;text-align:left;transition:border-color .15s var(--ease)}
+.kpi:hover{border-color:var(--line2)}
+.kpi .l{font-size:13px;color:var(--soft);display:flex;align-items:center;gap:8px}
+.kpi .l i{width:8px;height:8px;border-radius:50%;background:var(--line2);flex:none}
+.kpi .v{font-size:28px;font-weight:600;margin:8px 0 4px;letter-spacing:-.01em}
+.kpi .s{font-size:13px;color:var(--soft)}
+.kpi .more{position:absolute;right:16px;top:20px;font-size:12px;color:var(--mute)}
+.kpi.good .l i{background:var(--good)} .kpi.good .v{color:var(--good)}
+.kpi.bad .l i{background:var(--bad)} .kpi.bad .v{color:var(--bad)}
+.kpi.warn .l i{background:var(--warn)} .kpi.warn .v{color:var(--warn)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 384px;gap:24px;align-items:start}
+.side{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:20px}
+.panel h3{margin:0 0 12px;font-size:14px;font-weight:600}
+
+.sec{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);margin-bottom:12px;overflow:hidden}
+.sec>button{width:100%;border:0;background:none;display:flex;align-items:center;gap:16px;padding:16px 20px;text-align:left;transition:background-color .15s var(--ease)}
+.sec>button:hover{background:var(--raise)}
+.sec .ic{width:36px;height:36px;border-radius:10px;background:var(--raise);border:1px solid var(--line);display:grid;place-items:center;flex:none;color:var(--soft)}
+.sec .ic svg{width:18px;height:18px}
+.sec .t{flex:1;min-width:0}
+.sec .t b{display:block;font-size:15px;font-weight:600}
+.sec .t span{font-size:13px;color:var(--soft)}
+.sec .tot{font-weight:600;text-align:right;white-space:nowrap}
+.sec .tot small{display:block;font-weight:400;font-size:12px;color:var(--soft)}
+.sec .chev{color:var(--mute);transition:transform .2s var(--ease)}
+.sec.open .chev{transform:rotate(90deg)}
+.body{display:none;padding:4px 20px 20px;border-top:1px solid var(--line)}
+.sec.open .body{display:block}
+.note{font-size:13px;color:var(--soft);margin:12px 0 4px}
+
+.sl{padding:12px 0;border-bottom:1px dashed var(--line2)}
+.sl:last-child{border-bottom:0}
+.sl .row{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.sl label{font-size:14px}
+.sl .val{font-weight:600;white-space:nowrap}
+.sl .hint{font-size:12px;color:var(--mute)}
+/* signature: tape-measure ticks under the track */
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;margin:4px 0 0;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:var(--line2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:#fff;border:2px solid var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--line2)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--accent)}
+.sl .tape{height:4px;margin-top:-2px;background:repeating-linear-gradient(90deg,var(--line2) 0 1px,transparent 1px 10%);opacity:.9}
+.grp{font-size:13px;font-weight:600;color:var(--chalk);margin:20px 0 4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+
+.item{border-bottom:1px solid var(--line);padding:8px 0}
+.item:last-child{border-bottom:0}
+.item .head{display:flex;align-items:center;gap:12px;min-height:36px}
+.item .nm{flex:1;border:0;background:none;text-align:left;padding:4px 0;font-size:14px;display:flex;align-items:center;gap:8px}
+.item .nm svg{width:14px;height:14px;color:var(--mute);transition:transform .2s var(--ease);flex:none}
+.item.open .nm svg{transform:rotate(90deg)}
+.tag{font-size:12px;padding:2px 8px;border-radius:6px;background:var(--raise);border:1px solid var(--line);color:var(--soft);white-space:nowrap}
+.tag.tpr{color:var(--chalk)}
+.tag.sh{color:var(--accent)}
+.tag.q{color:var(--warn)} .tag.q.quoted{color:var(--good)}
+.qchk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer}
+.qchk input{accent-color:var(--accent);width:16px;height:16px}
+.mini{display:inline-flex;background:var(--raise);border:1px solid var(--line);border-radius:var(--r-ctl);padding:2px}
+.mini button{border:0;background:none;padding:4px 8px;border-radius:6px;font-size:12px;color:var(--soft);transition:background-color .15s var(--ease),color .15s var(--ease)}
+.mini button.on{background:#fff;color:var(--ink);box-shadow:0 0 0 1px var(--line2)}
+.item .amt{width:104px;text-align:right;font-size:14px}
+.item .amt.off{color:var(--mute);text-decoration:line-through}
+.item .detail{display:none;margin:8px 0 4px;padding:12px 16px;background:var(--raise);border:1px solid var(--line);border-radius:10px}
+.item.open .detail{display:block}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px;margin-bottom:4px}
+.vs div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.vs b{display:block;font-size:12px;font-weight:600;color:var(--chalk)}
+.catsum{display:flex;justify-content:space-between;gap:12px;font-size:13px;font-weight:600;margin:24px 0 4px;padding-bottom:8px;border-bottom:1px solid var(--ink)}
+.catsum span:last-child{font-weight:400;color:var(--soft)}
+
+.verdict{display:flex;gap:12px;align-items:flex-start}
+.verdict .dot{width:10px;height:10px;border-radius:50%;margin-top:8px;flex:none;background:var(--good)}
+.verdict.bad .dot{background:var(--bad)} .verdict.warn .dot{background:var(--warn)}
+.verdict b{font-size:18px;font-weight:600;display:block;margin-bottom:4px}
+.verdict.bad b{color:var(--bad)} .verdict.warn b{color:var(--warn)} .verdict.ok b{color:var(--good)}
+.verdict p{margin:0;font-size:13px;color:var(--soft)}
+.list{list-style:none;margin:16px 0 0;padding:12px 0 0;border-top:1px solid var(--line);font-size:13px}
+.list li{display:flex;justify-content:space-between;padding:4px 0;color:var(--soft)}
+.list li span:last-child{color:var(--ink)}
+.list li.k{font-weight:600}.list li.k span{color:var(--ink)}
+svg text{font:12px -apple-system,"PingFang TC",sans-serif;fill:var(--mute)}
+.occ{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.occ button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px;text-align:center;transition:border-color .15s var(--ease)}
+.occ button:hover{border-color:var(--line2)}
+.occ button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.occ b{display:block;font-weight:600}
+.occ span{font-size:12px;color:var(--soft)}
+
+.modal{position:fixed;inset:0;background:rgba(20,24,22,.4);display:grid;place-items:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.dlg{background:var(--card);border-radius:16px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:24px}
+.dlg h2{margin:0 0 4px;font-size:18px;font-weight:600}
+.dlg table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+.dlg td{padding:8px 4px;border-bottom:1px solid var(--line)}
+.dlg td:last-child{text-align:right;white-space:nowrap}
+.dlg tr.t td{font-weight:600;border-top:1px solid var(--ink)}
+.dlg tr.h td{text-align:left;font-size:13px;font-weight:600;color:var(--chalk);padding-top:20px}
+.dlg .x{float:right;border:1px solid var(--line2);background:#fff;border-radius:var(--r-ctl);padding:4px 12px;font-size:13px}
+.tiers{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.tiers td,.tiers th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:right}
+.tiers th{color:var(--soft);font-weight:600}
+.tiers td:first-child,.tiers th:first-child{text-align:left}
+
+@media(max-width:1020px){.grid{grid-template-columns:1fr}.side{position:static}.kpis{grid-template-columns:1fr 1fr}.cols{grid-template-columns:1fr}}
+@media(max-width:560px){.wrap{padding:20px 16px 48px}.kpis{grid-template-columns:1fr}.item .head{flex-wrap:wrap}.item .nm{flex-basis:100%}.item .amt{margin-left:auto}.sec .t span{display:none}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>加連威老道 29 號 · 開店可行性</h1>
+      <div class="sub">所有數字都可以用滑桿調整。預設值是估算，沒有供應商報價。點卡片或項目看詳情。</div>
+    </div>
+    <div class="bar">
+      <span class="sub">情境</span>
+      <div class="seg" id="preset">
+        <button data-p="low">保守</button><button data-p="base">基本</button><button data-p="high">進取</button>
+      </div>
+      <span class="sub">建造</span>
+      <div class="seg" id="ver">
+        <button data-v="s">全部簡易</button><button data-v="c">全部完整</button>
+      </div>
+      <button class="ghost" id="reset">重設</button>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <main id="secs"></main>
+    <aside class="side">
+      <div class="panel" id="verdict"></div>
+      <div class="panel">
+        <h3>每月營運開支由誰付</h3>
+        <ul class="list" id="whoPays" style="margin:0;padding:0;border:0"></ul>
+      </div>
+      <div class="panel">
+        <h3>開業後 36 個月我方現金</h3>
+        <div id="chart"></div>
+        <div class="sub" id="chartNote"></div>
+      </div>
+      <div class="panel">
+        <h3>不同入座率下我方每月盈利</h3>
+        <div class="occ" id="occ"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal" id="modal" hidden><div class="dlg" id="dlg" role="dialog" aria-modal="true" tabindex="-1"></div></div>
+
+<script>
+/* ---------- parameter definitions ---------- */
+// [key, label, default, min, max, step, unit, hint]
+const DEF = {};
+const def = (k, label, v, min, max, step, unit, hint) => DEF[k] = { k, label, v, min, max, step, unit: unit || '$', hint: hint || '' };
+
+// funding
+def('boss', '老闆出資', 100000, 0, 3000000, 10000, '$', '目前已籌');
+def('tprInvest', '大班廊投資我方部分', 0, 0, 3000000, 10000, '$', '未知，預設 0');
+def('loan', '借貸或其他投資者', 0, 0, 3000000, 10000);
+def('eqPct', '出售股份（股東等級）', 5, 0, 49, 1, '%', '股東分走我方盈利的相同比例');
+def('eqPrice', '每 1% 股份價錢', 23500, 5000, 100000, 500, '$', '23,500 即公司估值 235 萬');
+// site & rent
+def('grossArea', '建築面積', 2972, 1500, 6000, 10, '呎');
+def('usableArea', '實用面積', 1900, 1000, 5000, 10, '呎', '未確認，估計建築面積六至七成');
+def('rent', '月租', 74300, 30000, 200000, 100, '$', '叫價；議價目標約 65,400');
+def('mgmt', '冷氣連管理費', 24000, 0, 60000, 500, '$', '放盤：二萬四千幾');
+def('rates', '差餉', 3700, 0, 15000, 100, '$', '估計全年租值 5%');
+def('shRent', '大班廊分擔租金', 50, 0, 100, 5, '%');
+def('shMgmt', '大班廊分擔冷管費', 50, 0, 100, 5, '%');
+def('shRates', '大班廊分擔差餉', 50, 0, 100, 5, '%');
+// utilities
+def('elec', '電費', 8000, 0, 30000, 500); def('shElec', '大班廊分擔電費', 50, 0, 100, 5, '%');
+def('water', '水費', 500, 0, 5000, 100); def('shWater', '大班廊分擔水費', 50, 0, 100, 5, '%');
+def('net', '網絡、電話', 3000, 0, 10000, 100); def('shNet', '大班廊分擔網絡', 50, 0, 100, 5, '%');
+def('clean', '清潔', 3000, 0, 20000, 500); def('shClean', '大班廊分擔清潔', 50, 0, 100, 5, '%');
+def('insur', '保險（公眾責任、財物、勞保）', 4000, 0, 20000, 500); def('shInsur', '大班廊分擔保險', 50, 0, 100, 5, '%');
+def('repair', '日常維修', 2000, 0, 15000, 500); def('shRepair', '大班廊分擔維修', 50, 0, 100, 5, '%');
+// construction shares
+def('shFront', '大班廊付前舖裝修', 100, 0, 100, 5, '%', '前舖由大班廊經營');
+def('shShared', '大班廊付共用工程', 50, 0, 100, 5, '%', '設計、審批、電力、冷氣、消防等');
+def('contS', '預備金（簡易項目）', 10, 0, 30, 1, '%');
+def('contC', '預備金（完整項目）', 15, 0, 30, 1, '%');
+// lease one-offs & pre-opening
+def('depM', '按金', 3, 0, 6, 0.5, '月', '租金加冷管費的月數，退租時退回');
+def('stamp', '印花稅', 0.5, 0, 1, 0.25, '%', '三年租約約全年租金 0.5%');
+def('agentM', '代理佣金', 0.5, 0, 1, 0.25, '月', '月租的倍數');
+def('fitM', '裝修期', 3, 0, 9, 0.5, '月', '未開業但要付租');
+def('freeM', '免租期', 2, 0, 6, 0.5, '月', '向業主爭取');
+def('launch', '開業宣傳', 50000, 0, 300000, 5000);
+def('preStaff', '開業前員工薪金', 1, 0, 3, 0.5, '月', '培訓和試業');
+def('reserve', '營運備用金', 3, 0, 12, 1, '月', '開業時預留幾個月固定開支');
+// staff & running
+def('staffN', '員工人數（我方）', 4, 1, 12, 1, '人');
+def('salary', '每人月薪', 19000, 12000, 40000, 500);
+def('mpf', '強積金', 5, 0, 10, 1, '%');
+def('maint', '機關保養、煙霧液', 8000, 0, 40000, 500);
+def('mkt', '每月宣傳', 15000, 0, 80000, 1000);
+def('admin', '會計、秘書、行政', 3000, 0, 20000, 500);
+def('soft', '預約系統及軟件', 1500, 0, 10000, 100);
+def('misc', '其他雜項', 2000, 0, 20000, 500);
+def('cardFee', '刷卡及平台手續費', 3, 0, 8, 0.5, '%', '佔收入');
+def('fiab', '體驗合作夥伴費（Fox in a Box）', 10, 0, 30, 1, '%', '佔門票收入，暫定');
+// tickets
+def('ticket', '每位門票', 300, 100, 1500, 10);
+def('group', '每場人數', 4, 1, 10, 1, '人');
+def('slots', '每日場數', 10, 1, 20, 1, '場');
+def('days', '每月營業日', 30, 10, 31, 1, '日');
+def('occ', '入座率', 50, 5, 100, 5, '%');
+def('rampM', '開業後幾個月達到正常生意', 6, 0, 18, 1, '月');
+def('rampStart', '第一個月生意', 40, 10, 100, 5, '%', '佔正常生意的比例');
+// gadgets
+def('attach', '買精品的客人比例', 30, 0, 100, 5, '%');
+def('basket', '每位平均消費', 900, 100, 7000, 50);
+def('gm', '精品毛利率', 45, 10, 80, 1, '%');
+// other income
+def('suitConv', '轉介做西裝的客人比例', 1, 0, 10, 0.5, '%');
+def('suitPrice', '每套西裝價錢', 15000, 6000, 40000, 500);
+def('refComm', '大班廊給我方的轉介佣金', 10, 0, 30, 1, '%');
+def('events', 'VIP 室包場（每月）', 2, 0, 20, 1, '次');
+def('eventFee', '每次包場收費', 8000, 0, 50000, 500);
+def('eventCost', '包場成本', 30, 0, 80, 5, '%');
+def('members', '會員人數', 0, 0, 300, 5, '人', '老闆文件：之後才做');
+def('memberFee', '每月會費', 3000, 0, 100000, 500);
+// partner tiers
+const TIERS = [
+  { id: 'adv', name: '專櫃 Advanced', line: '派自己的人駐店，用自己的標誌', n: 2, one: 24000, yr: 18000, comm: 0, mg: 28, sales: 25800 },
+  { id: 'int', name: '駐場 Intermediate', line: '放自己的標誌和貨品', n: 3, one: 12000, yr: 0, comm: 10, mg: 20, sales: 19750 },
+  { id: 'bas', name: '上架 Basic', line: '把貨品放在我們店內寄賣', n: 5, one: 0, yr: 0, comm: 25, mg: 15, sales: 18600 },
+];
+TIERS.forEach(t => {
+  def(t.id + 'N', '品牌數目', t.n, 0, 20, 1, '個');
+  def(t.id + 'One', '一次性入場費', t.one, 0, 100000, 1000);
+  def(t.id + 'Yr', '每年櫃位租金', t.yr, 0, 100000, 1000);
+  def(t.id + 'Comm', '我方佣金', t.comm, 0, 50, 1, '%');
+  def(t.id + 'Mg', '品牌每單利潤率', t.mg, 0, 60, 1, '%', '用來估品牌一年賺多少');
+  def(t.id + 'Sales', '每個品牌每月銷售（五成入座時）', t.sales, 0, 100000, 250, '$', '隨入座率按比例增減');
+});
+
+/* ---------- construction items ---------- */
+// p: front | shared | ours ; room items have area + rate per sq ft
+const ITEMS = [
+  ['裝修及傢俬', [
+    { id: 'rFront', n: '前舖（洋服店）', p: 'front', area: 640, sr: 600, cr: 1300, sd: '油漆、地板、燈、基本木櫃', cd: '雲石、訂造木櫃、品牌燈光' },
+    { id: 'rElev1', n: '試身室（升降機一）', p: 'ours', area: 120, sr: 500, cr: 1200, sd: '基本牆身和地台', cd: '瓷磚大堂、銅飾' },
+    { id: 'rCorr', n: '暗廊', p: 'ours', area: 225, sr: 350, cr: 900, sd: '黑色牆身、簡單燈槽', cd: '感應燈逐盞亮、牆身飾面' },
+    { id: 'rBack', n: '後舖（精品店）', p: 'ours', area: 400, sr: 450, cr: 1100, sd: '基本展示牆', cd: '木壁板、燈箱展示、吊燈' },
+    { id: 'rVip', n: 'VIP 室', p: 'ours', area: 360, sr: 500, cr: 1300, sd: '牆紙、地板、基本燈', cd: '木護牆、壁爐、吊燈、地氈' },
+    { id: 'rElev2', n: '升降機二', p: 'ours', area: 90, sr: 450, cr: 1100, sd: '基本轎廂飾面', cd: '仿古轎廂、木和銅飾' },
+    { id: 'rBoh', n: '控制室及後勤', p: 'ours', area: 65, sr: 300, cr: 500, sd: '基本間隔', cd: '隔音控制室、儲物' },
+    { id: 'fFront', n: '前舖傢俬及展示', p: 'front', s: 30000, c: 100000, sd: '基本衣架和櫃', cd: '訂造衣櫃和試身鏡' },
+    { id: 'fVip', n: 'VIP 室傢俬', p: 'ours', s: 30000, c: 150000, sd: '長桌和六張椅', cd: '訂造長桌、八張皮椅、裝飾' },
+    { id: 'fBack', n: '後舖展示櫃', p: 'ours', s: 40000, c: 120000, sd: '層架', cd: '燈箱玻璃櫃' },
+    { id: 'fSign', n: '招牌', p: 'shared', s: 15000, c: 60000, sd: '窗貼', cd: '外牆招牌和大堂水牌' },
+  ]],
+  ['螢幕', [
+    { id: 'scrE2', n: '升降機二門面螢幕', p: 'ours', s: 24000, c: 90000, sd: '兩部 55 吋家用級', cd: '兩部商用直立螢幕' },
+    { id: 'mSky', n: '試身室天幕', p: 'ours', s: 20000, c: 80000, sd: '燈箱', cd: '顯示屏天幕' },
+    { id: 'scrOther', n: '其他房間螢幕', p: 'ours', s: 36000, c: 160000, sd: '兩至三部', cd: '每個房間都有' },
+  ]],
+  ['升降機和鏡子機關', [
+    { id: 'mScroll', n: '試身室捲軸牆（下降效果）', p: 'ours', s: 150000, c: 450000, sd: '兩面電動印刷布景', cd: '四面捲軸牆同步移動' },
+    { id: 'mArch', n: '磚拱及大堂', p: 'ours', s: 10000, c: 70000, sd: '仿磚貼面', cd: '真磚拱和瓷磚大堂' },
+    { id: 'mElev2', n: '升降機二閘門及轎廂', p: 'ours', s: 30000, c: 150000, sd: '仿鐵閘', cd: '真鐵閘、轎廂震動效果' },
+    { id: 'mMirror', n: '雙面鏡／鏡子機關', p: 'ours', s: 20000, c: 40000, sd: '雙面鏡', cd: '鏡門連燈光切換' },
+    { id: 'mInf', n: '無限鏡', p: 'ours', s: 15000, c: 60000, sd: '細尺寸', cd: '整面牆，標誌輪廓燈' },
+    { id: 'mBook', n: '書櫃自動趟門', p: 'ours', s: 60000, c: 120000, sd: '商用自動門機加假書', cd: '雙扇，連安全感應和手動開啟' },
+    { id: 'mHook', n: '掛衣鈎暗門', p: 'ours', s: 15000, c: 25000, sd: '電磁鎖', cd: '電磁鎖連隱藏鉸' },
+    { id: 'mTarget', n: '彈出靶連紅外線槍', p: 'ours', s: 20000, c: 50000, sd: '固定靶', cd: '彈出靶連計分' },
+    { id: 'mSmoke', n: '地台煙霧噴嘴', p: 'ours', s: 0, c: 40000, sd: '不做（用手提煙霧機）', cd: '門框兩邊地台噴嘴' },
+  ]],
+  ['影音設備', [
+    { id: 'avSound', n: '音響', p: 'ours', s: 30000, c: 100000, sd: '每區一對喇叭', cd: '多區音響，配合劇情' },
+    { id: 'avLight', n: '效果燈光', p: 'ours', s: 40000, c: 150000, sd: '可調光燈', cd: '舞台燈，可編程' },
+    { id: 'avCtrl', n: '中央控制系統', p: 'ours', s: 10000, c: 80000, sd: '手動開關', cd: '燈光、音響、機關一鍵控制' },
+    { id: 'avHaze', n: '煙霧機', p: 'ours', s: 10000, c: 30000, sd: '一部', cd: '專業低煙霧機' },
+    { id: 'avCam', n: '監控鏡頭', p: 'ours', s: 10000, c: 20000, sd: '基本鏡頭', cd: '每房鏡頭連錄影' },
+    { id: 'avOps', n: '操作員控制台', p: 'ours', s: 5000, c: 30000, sd: '一部電腦', cd: '多屏控制台' },
+    { id: 'avPos', n: '收銀及預約平板', p: 'shared', s: 15000, c: 30000, sd: '平板加收銀機', cd: '兩套收銀系統' },
+    { id: 'fWeb', n: '網站及預約系統設定', p: 'ours', s: 15000, c: 50000, sd: '現成平台', cd: '訂造網站' },
+  ]],
+  ['工程', [
+    { id: 'design', n: '室內設計及項目管理', p: 'shared', s: 60000, c: 200000, sd: '平面佈局和基本效果圖', cd: '全套設計、物料、施工圖和監工' },
+    { id: 'eDemo', n: '拆除及清場', p: 'shared', s: 20000, c: 30000, sd: '清走雜物', cd: '拆除現有間隔' },
+    { id: 'ePower', n: '電力加大', p: 'shared', s: 60000, c: 100000, sd: '加開電路', cd: '三相電重新配電' },
+    { id: 'eAc', n: '冷氣及排風', p: 'shared', s: 80000, c: 150000, sd: '加排風扇', cd: '分區冷氣和煙霧排放' },
+    { id: 'eFire', n: '消防花灑及探測器改位', p: 'shared', s: 50000, c: 80000, sd: '按新間隔改位', cd: '連煙霧區分區探測' },
+    { id: 'ePlumb', n: '水喉渠務', p: 'shared', s: 20000, c: 30000, sd: '洗手間維修', cd: '加洗手盆和茶水間' },
+    { id: 'eSound', n: '隔音', p: 'ours', s: 20000, c: 80000, sd: '門縫和天花', cd: '房間之間全面隔音' },
+  ]],
+  ['安全和審批', [
+    { id: 'ap', n: '認可人士（建築師）及圖則', p: 'shared', s: 40000, c: 80000, sd: '小型工程申報所需圖則', cd: '連逃生路線和改動用途的圖則' },
+    { id: 'fire', n: '消防顧問', p: 'shared', s: 20000, c: 40000, sd: '煙霧效果和暗門的意見', cd: '連消防申報和驗收' },
+    { id: 'struct', n: '結構工程師', p: 'shared', s: 0, c: 40000, sd: '不需要（沒有重物）', cd: '檢查樓面承重（機關、書櫃）' },
+    { id: 'permit', n: '屋宇署申報及牌照費', p: 'shared', s: 10000, c: 20000, sd: '小型工程申報', cd: '連娛樂場所牌照申請（如需要）' },
+    { id: 'legal', n: '律師審租約', p: 'shared', s: 20000, c: 30000, sd: '審閱租約', cd: '連合作協議和股東協議' },
+  ]],
+  ['存貨', [
+    { id: 'stRing', n: '戒指首批', p: 'ours', area: 300, sr: 500, cr: 500, unit: '隻', qLabel: '數量', noCont: true, qMax: 2000, rMax: 2000, sd: '自家品牌戒指，每隻成本約 $500', cd: '同左；完整版可另調數量' },
+    { id: 'fStock', n: '其他精品', p: 'ours', s: 0, c: 250000, noCont: true, sd: '只賣戒指', cd: '加其他精品' },
+  ]],
+];
+const ALL = ITEMS.flatMap(([, list]) => list);
+const PAYER = { front: ['前舖', 'tpr'], shared: ['共用', 'sh'], ours: ['我方', ''] };
+
+/* ---------- state ---------- */
+const KEY = 'kx-feasibility-v3';
+function fresh() {
+  const p = {}; for (const k in DEF) p[k] = DEF[k].v;
+  const it = {}; ALL.forEach(i => it[i.id] = { m: 's', q: false, s: i.s, c: i.c, area: i.area, sr: i.sr, cr: i.cr });
+  return { p, it, open: { fund: true } };
+}
+let S = fresh();
+try { const saved = JSON.parse(localStorage.getItem(KEY)); if (saved && saved.p) { Object.assign(S.p, saved.p); for (const id in saved.it) if (S.it[id]) Object.assign(S.it[id], saved.it[id]); S.open = saved.open || S.open; } } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+/* ---------- maths ---------- */
+const itemCost = (i, st, mode) => {
+  const m = mode || st.m; if (m === 'x') return 0;
+  return i.area != null ? st.area * (m === 's' ? st.sr : st.cr) : (m === 's' ? st.s : st.c);
+};
+function calc(over = {}) {
+  const p = Object.assign({}, S.p, over), r = {};
+  const share = (amt, pct) => [amt * pct / 100, amt * (1 - pct / 100)];
+  // monthly site costs [tpr, ours]
+  const site = [['租金', p.rent, p.shRent], ['冷氣連管理費', p.mgmt, p.shMgmt], ['差餉', p.rates, p.shRates],
+    ['電費', p.elec, p.shElec], ['水費', p.water, p.shWater], ['網絡、電話', p.net, p.shNet], ['清潔', p.clean, p.shClean],
+    ['保險', p.insur, p.shInsur], ['日常維修', p.repair, p.shRepair]].map(([n, a, s]) => { const [t, o] = share(a, s); return { n, a, t, o }; });
+  r.site = site;
+  r.rentAll = p.rent + p.mgmt + p.rates;
+  r.rentOurs = site.slice(0, 3).reduce((x, y) => x + y.o, 0);
+  r.siteOurs = site.reduce((x, y) => x + y.o, 0);
+  r.siteTpr = site.reduce((x, y) => x + y.t, 0);
+  r.staff = p.staffN * p.salary * (1 + p.mpf / 100);
+  r.fixedOurs = r.siteOurs + r.staff + p.maint + p.mkt + p.admin + p.soft + p.misc;
+  // revenue at full ramp
+  r.guests = p.slots * p.days * p.occ / 100 * p.group;
+  r.tickets = r.guests * p.ticket;
+  r.gadgetRev = r.guests * p.attach / 100 * p.basket;
+  r.gadgetGP = r.gadgetRev * p.gm / 100;
+  r.tiers = TIERS.map(t => {
+    const n = p[t.id + 'N'], sales = n * p[t.id + 'Sales'] * p.occ / 50;
+    return { t, n, sales, comm: sales * p[t.id + 'Comm'] / 100, rent: n * p[t.id + 'Yr'] / 12, one: n * p[t.id + 'One'] };
+  });
+  r.partnerComm = r.tiers.reduce((x, y) => x + y.comm, 0);
+  r.partnerRent = r.tiers.reduce((x, y) => x + y.rent, 0);
+  r.partnerOne = r.tiers.reduce((x, y) => x + y.one, 0);
+  r.referral = r.guests * p.suitConv / 100 * p.suitPrice * p.refComm / 100;
+  r.eventGross = p.events * p.eventFee; r.eventNet = r.eventGross * (1 - p.eventCost / 100);
+  r.member = p.members * p.memberFee;
+  r.revenue = r.tickets + r.gadgetRev + r.partnerComm + r.partnerRent + r.referral + r.eventGross + r.member;
+  r.gp = r.tickets + r.gadgetGP + r.partnerComm + r.partnerRent + r.referral + r.eventNet + r.member;
+  r.card = (r.tickets + r.gadgetRev + r.eventGross + r.member) * p.cardFee / 100;
+  r.fiabFee = r.tickets * p.fiab / 100;
+  r.contrib = r.gp - r.card - r.fiabFee;           // scales with ramp
+  r.ebitda = r.contrib - r.fixedOurs;
+  r.investors = Math.max(0, r.ebitda) * p.eqPct / 100;
+  r.net = r.ebitda - r.investors;
+  // construction
+  r.cats = ITEMS.map(([cat, list]) => {
+    let all = 0, ours = 0, tpr = 0, baseSum = 0;
+    list.forEach(i => {
+      const st = S.it[i.id]; const base = itemCost(i, st);
+      const withCont = base * (1 + (i.noCont ? 0 : (st.m === 'c' ? p.contC : p.contS)) / 100);
+      const tp = i.p === 'front' ? p.shFront : i.p === 'shared' ? p.shShared : 0;
+      all += withCont; tpr += withCont * tp / 100; ours += withCont * (1 - tp / 100); baseSum += base;
+    });
+    return { cat, all, ours, tpr, base: baseSum };
+  });
+  r.buildBase = ALL.reduce((x, i) => x + itemCost(i, S.it[i.id]), 0);
+  r.buildAll = r.cats.reduce((x, c) => x + c.all, 0);
+  r.buildOurs = r.cats.reduce((x, c) => x + c.ours, 0);
+  r.buildTpr = r.cats.reduce((x, c) => x + c.tpr, 0);
+  r.contAmt = r.buildAll - r.buildBase;
+  r.assumed = ALL.filter(i => S.it[i.id].m !== 'x' && !S.it[i.id].q).length;
+  r.quoted = ALL.filter(i => S.it[i.id].m !== 'x' && S.it[i.id].q).length;
+  r.roomArea = ALL.filter(i => i.area != null && !i.unit).reduce((x, i) => x + S.it[i.id].area, 0);
+  // one-offs (whole shop, ours by rent share)
+  const ours = 1 - p.shRent / 100;
+  r.deposit = p.depM * (p.rent + p.mgmt);
+  r.stampAmt = p.stamp / 100 * p.rent * 12;
+  r.agent = p.agentM * p.rent;
+  r.preRent = Math.max(0, p.fitM - p.freeM) * r.rentAll;
+  r.leaseAll = r.deposit + r.stampAmt + r.agent + r.preRent;
+  r.leaseOurs = r.leaseAll * ours;
+  r.preStaffAmt = p.preStaff * r.staff;
+  r.reserveAmt = p.reserve * r.fixedOurs;
+  r.openNoReserve = r.buildOurs + r.leaseOurs + p.launch + r.preStaffAmt;
+  r.need = r.openNoReserve + r.reserveAmt;
+  r.investedSunk = r.openNoReserve - r.deposit * ours; // deposit comes back
+  // funding
+  r.eqFunds = p.eqPct * p.eqPrice;
+  r.funds = p.boss + p.tprInvest + p.loan + r.eqFunds + r.partnerOne;
+  r.gap = r.funds - r.need;
+  // 36-month cash path after opening
+  let cash = r.funds - r.openNoReserve, low = cash, cum = 0, pay = null; r.path = [cash];
+  for (let m = 1; m <= 36; m++) {
+    const ramp = p.rampM ? Math.min(1, p.rampStart / 100 + (1 - p.rampStart / 100) * (m - 1) / p.rampM) : 1;
+    const e = r.contrib * ramp - r.fixedOurs; const n = e - Math.max(0, e) * p.eqPct / 100;
+    cash += n; cum += n; r.path.push(cash); low = Math.min(low, cash);
+    if (pay === null && cum >= r.investedSunk) pay = m;
+  }
+  r.low = low; r.payback = pay;
+  if (pay === null && r.net > 0) { // beyond 36 months: extrapolate at full ramp
+    let c = cum, m = 36; while (c < r.investedSunk && m < 600) { c += r.net; m++; } r.payback = m < 600 ? m : null;
+  }
+  r.shortfall = Math.max(0, -low);
+  // enough to open with the reserve AND never let cash fall below zero in 36 months
+  r.required = Math.max(r.need, r.funds - low);
+  r.toRaise = Math.max(0, r.required - r.funds);
+  return r;
+}
+
+/* ---------- formatting ---------- */
+const money = v => (v < 0 ? '−' : '') + 'HK$' + Math.round(Math.abs(v)).toLocaleString('en-US');
+const wan = v => (v < 0 ? '−' : '') + 'HK$' + (Math.abs(v) / 10000).toLocaleString('en-US', { maximumFractionDigits: Math.abs(v) < 1e5 ? 1 : 0 }) + ' 萬';
+const fmt = (k, v) => { const u = DEF[k].unit; return u === '$' ? money(v) : u === '%' ? v + '%' : v.toLocaleString('en-US') + ' ' + u; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- UI pieces ---------- */
+const sl = k => { const d = DEF[k]; return `<div class="sl"><div class="row"><label for="r-${k}">${d.label}</label><span class="val" id="v-${k}">${fmt(k, S.p[k])}</span></div>
+  ${d.hint ? `<div class="hint">${d.hint}</div>` : ''}<input type="range" id="r-${k}" data-k="${k}" min="${d.min}" max="${d.max}" step="${d.step}" value="${S.p[k]}"><div class="tape"></div></div>`; };
+const isl = (id, f, label, min, max, step, unit) => { const v = S.it[id][f];
+  return `<div class="sl"><div class="row"><label for="ri-${id}-${f}">${label}</label><span class="val" id="iv-${id}-${f}">${unit !== '$' ? v.toLocaleString('en-US') + ' ' + unit : money(v)}</span></div>
+  <input type="range" id="ri-${id}-${f}" data-i="${id}" data-f="${f}" data-u="${unit}" min="${min}" max="${max}" step="${step}" value="${v}"><div class="tape"></div></div>`; };
+
+const SECS = [
+  { id: 'fund', t: '資金來源', d: '老闆、大班廊、股東和合作品牌', sum: r => [wan(r.funds), '可用資金'],
+    html: () => `<div class="cols"><div>${sl('boss')}${sl('tprInvest')}${sl('loan')}</div><div>${sl('eqPct')}${sl('eqPrice')}
+      <div class="note">合作品牌入場費會自動計入資金，在「合作品牌等級」調整。</div></div></div>` },
+  { id: 'site', t: '舖位和租金', d: '租金、冷管費、差餉及大班廊分擔比例', sum: r => [money(r.rentOurs), '我方每月'],
+    html: () => `<div class="cols"><div>${sl('grossArea')}${sl('usableArea')}${sl('rent')}${sl('mgmt')}${sl('rates')}</div>
+      <div>${sl('shRent')}${sl('shMgmt')}${sl('shRates')}</div></div>` },
+  { id: 'util', t: '每月共用雜費', d: '水電、網絡、清潔、保險、維修', sum: r => [money(r.siteOurs - r.rentOurs), '我方每月'],
+    html: () => `<div class="cols">${['elec', 'water', 'net', 'clean', 'insur', 'repair'].map(k => `<div>${sl(k)}${sl('sh' + k[0].toUpperCase() + k.slice(1))}</div>`).join('')}</div>` },
+  { id: 'build', t: '建造費（逐項）', d: '每項可選簡易、完整或不做；點項目名稱看分別和調整金額', sum: r => [wan(r.buildOurs), '我方（全店 ' + wan(r.buildAll) + '）'],
+    html: buildHtml },
+  { id: 'open', t: '開業前一次性支出', d: '按金、印花稅、佣金、裝修期租金、宣傳、備用金', sum: r => [wan(r.need - r.buildOurs), '我方'],
+    html: () => `<div class="cols"><div>${sl('depM')}${sl('stamp')}${sl('agentM')}${sl('fitM')}${sl('freeM')}</div>
+      <div>${sl('launch')}${sl('preStaff')}${sl('reserve')}</div></div>` },
+  { id: 'run', t: '員工及營運', d: '人工、保養、宣傳、手續費', sum: r => [money(r.fixedOurs - r.siteOurs), '我方每月（不含租金雜費）'],
+    html: () => `<div class="cols"><div>${sl('staffN')}${sl('salary')}${sl('mpf')}${sl('maint')}${sl('mkt')}</div>
+      <div>${sl('admin')}${sl('soft')}${sl('misc')}${sl('cardFee')}${sl('fiab')}</div></div>` },
+  { id: 'tix', t: '收入：門票', d: '票價、場數、入座率、開業初期', sum: r => [money(r.tickets), Math.round(r.guests).toLocaleString() + ' 位客人／月'],
+    html: () => `<div class="cols"><div>${sl('ticket')}${sl('group')}${sl('slots')}${sl('days')}</div><div>${sl('occ')}${sl('rampM')}${sl('rampStart')}</div></div>` },
+  { id: 'gad', t: '收入：精品及其他', d: '戒指精品、西裝轉介、VIP 包場、會員', sum: r => [money(r.gadgetGP + r.referral + r.eventNet + r.member), '每月毛利'],
+    html: () => `<div class="cols"><div>${sl('attach')}${sl('basket')}${sl('gm')}${sl('suitConv')}${sl('suitPrice')}${sl('refComm')}</div>
+      <div>${sl('events')}${sl('eventFee')}${sl('eventCost')}${sl('members')}${sl('memberFee')}</div></div>` },
+  { id: 'tier', t: '合作品牌等級', d: '專櫃、駐場、上架；股東在「資金來源」', sum: r => [money(r.partnerComm + r.partnerRent), '我方每月'],
+    html: tierHtml },
+];
+
+function buildHtml() {
+  return `<div class="cols"><div>${sl('shFront')}${sl('shShared')}</div><div>${sl('contS')}${sl('contC')}</div></div>
+  <div class="note">房間面積合計 <b id="roomArea"></b>，實用面積 <b id="useArea"></b>。沒有供應商報價的項目都標為「假設」，<span id="assumeNote"></span>。</div>` +
+  ITEMS.map(([cat, list], ci) => `<div class="catsum"><span>${cat}</span><span id="cat-${ci}"></span></div>` + list.map(i => {
+    const st = S.it[i.id], [pl, pc] = PAYER[i.p];
+    const sliders = i.area != null
+      ? isl(i.id, 'area', i.qLabel || '面積', 0, i.qMax || 1500, 5, i.unit || '呎') + isl(i.id, 'sr', `簡易每${i.unit || '呎'}單價`, 50, i.rMax || 2000, 10, '$') + isl(i.id, 'cr', `完整每${i.unit || '呎'}單價`, 50, i.rMax || 4000, 10, '$')
+      : isl(i.id, 's', '簡易版金額', 0, Math.max(100000, i.s * 4), 1000, '$') + isl(i.id, 'c', '完整版金額', 0, Math.max(200000, i.c * 3), 1000, '$');
+    return `<div class="item" id="it-${i.id}"><div class="head">
+      <button class="nm" data-open="${i.id}">${svg('<path d="m9 18 6-6-6-6"/>')}${i.n}</button><span class="tag ${pc}">${pl}</span><span class="tag q" id="q-${i.id}"></span>
+      <span class="mini" data-mi="${i.id}" role="group" aria-label="${i.n} 做法"><button data-m="s">簡</button><button data-m="c">完整</button><button data-m="x">不做</button></span>
+      <span class="amt" id="amt-${i.id}"></span></div>
+      <div class="detail"><label class="qchk"><input type="checkbox" data-q="${i.id}" ${st.q ? 'checked' : ''}> 已有供應商報價（金額按報價填）</label><div class="vs"><div><b>簡易</b>${i.sd}</div><div><b>完整</b>${i.cd}</div></div>${sliders}</div></div>`;
+  }).join('')).join('') + `<div class="catsum"><span>預備金（簡易 ${S.p.contS}%、完整 ${S.p.contC}%，存貨不計）</span><span id="cat-cont"></span></div>`;
+}
+
+function tierHtml() {
+  return TIERS.map(t => `<div class="grp">${t.name}</div><div class="note">${t.line}</div>
+    <div class="cols"><div>${sl(t.id + 'N')}${sl(t.id + 'One')}${sl(t.id + 'Yr')}</div><div>${sl(t.id + 'Comm')}${sl(t.id + 'Mg')}${sl(t.id + 'Sales')}</div></div>`).join('') +
+    `<div class="grp">每個品牌一年賺多少（品牌角度）</div><table class="tiers" id="tierTbl"></table>
+     <div class="note">品牌一年 = 銷售 × 品牌利潤率 − 櫃位租金 − 入場費（第一年）。用來判斷價錢對品牌是否吸引。</div>`;
+}
+
+const ICON = {"fund": "<path d=\"M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1\"/><path d=\"M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4\"/>", "site": "<path d=\"M3 21h18\"/><path d=\"M5 21V7l8-4v18\"/><path d=\"M19 21V11l-6-4\"/><path d=\"M9 9v.01M9 12v.01M9 15v.01M9 18v.01\"/>", "util": "<path d=\"M13 2 3 14h9l-1 8 10-12h-9l1-8z\"/>", "build": "<path d=\"m15 12-8.4 8.4a2.1 2.1 0 1 1-3-3L12 9\"/><path d=\"M17.6 15 22 10.6\"/><path d=\"m20.9 11.7-1.3-1.3a2 2 0 0 1-.6-1.4V7.9L16.8 5.7a5.6 5.6 0 0 0-4-1.7H9l.9.8A6.2 6.2 0 0 1 12 9.4V11l2 2h1.5a2 2 0 0 1 1.4.6l1.3 1.3\"/>", "open": "<path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\"/><path d=\"M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8\"/><path d=\"M12 17.5v-11\"/>", "run": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75\"/>", "tix": "<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\"/><path d=\"M13 5v2M13 17v2M13 11v2\"/>", "gad": "<path d=\"M6 3h12l4 6-10 13L2 9Z\"/><path d=\"M11 3 8 9l4 13 4-13-3-6\"/><path d=\"M2 9h20\"/>", "tier": "<path d=\"m2 7 4.4-4.4A2 2 0 0 1 7.8 2h8.4a2 2 0 0 1 1.4.6L22 7\"/><path d=\"M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8\"/><path d=\"M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4\"/><path d=\"M2 7h20\"/><path d=\"M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-1.6-.6.7.7 0 0 0-.8 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.6-.6.7.7 0 0 0-.8 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.6-.6.7.7 0 0 0-.8 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.6-.6.7.7 0 0 0-.8 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7\"/>"};
+const svg = (d, cls) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${cls ? ` class="${cls}"` : ''}>${d}</svg>`;
+/* ---------- render ---------- */
+function renderSecs() {
+  document.getElementById('secs').innerHTML = SECS.map(s => `<section class="sec ${S.open[s.id] ? 'open' : ''}" id="sec-${s.id}">
+    <button data-sec="${s.id}" aria-expanded="${S.open[s.id] ? 'true' : 'false'}"><span class="ic">${svg(ICON[s.id])}</span><span class="t"><b>${s.t}</b><span>${s.d}</span></span>
+    <span class="tot" id="sum-${s.id}"></span><span class="chev">›</span></button><div class="body">${s.html()}</div></section>`).join('');
+}
+
+function update() {
+  const r = calc();
+  // section totals
+  SECS.forEach(s => { const [a, b] = s.sum(r); document.getElementById('sum-' + s.id).innerHTML = `${a}<small>${b}</small>`; });
+  // items
+  ALL.forEach(i => {
+    const st = S.it[i.id], el = document.getElementById('amt-' + i.id); if (!el) return;
+    el.textContent = money(itemCost(i, st, st.m === 'x' ? 'c' : st.m)); el.classList.toggle('off', st.m === 'x');
+    const qe = document.getElementById('q-' + i.id); qe.textContent = st.q ? '報價' : '假設'; qe.classList.toggle('quoted', !!st.q);
+    document.querySelectorAll(`[data-mi="${i.id}"] button`).forEach(b => b.classList.toggle('on', b.dataset.m === st.m));
+  });
+  r.cats.forEach((c, ci) => { const e = document.getElementById('cat-' + ci); if (e) e.textContent = money(c.base); });
+  const ce = document.getElementById('cat-cont'); if (ce) ce.textContent = money(r.contAmt);
+  const ae = document.getElementById('assumeNote'); if (ae) ae.textContent = `${r.assumed} 項是假設，${r.quoted} 項有報價`;
+  const ra = document.getElementById('roomArea'); if (ra) { ra.textContent = r.roomArea.toLocaleString() + ' 呎'; ra.style.color = r.roomArea > S.p.usableArea ? 'var(--bad)' : ''; document.getElementById('useArea').textContent = S.p.usableArea.toLocaleString() + ' 呎'; }
+  const tt = document.getElementById('tierTbl');
+  if (tt) tt.innerHTML = '<tr><th>等級</th><th>25% 入座</th><th>50% 入座</th><th>75% 入座</th></tr>' + TIERS.map(t => '<tr><td>' + t.name + '</td>' + [25, 50, 75].map(o => {
+    const p = S.p, sales = p[t.id + 'Sales'] * o / 50 * 12; return '<td>' + money(sales * p[t.id + 'Mg'] / 100 - p[t.id + 'Yr'] - p[t.id + 'One']) + '</td>'; }).join('') + '</tr>').join('');
+
+  // KPIs
+  const okFunds = r.toRaise === 0;
+  const k1 = okFunds ? ['good', '可以開業', `資金 ${wan(r.funds)}，需要 ${wan(r.required)}`]
+    : ['bad', '資金不足', `還差 ${wan(r.toRaise)}`];
+  const k4 = r.payback ? [r.payback <= 24 ? 'good' : r.payback <= 48 ? 'warn' : 'bad', r.payback + ' 個月', r.payback <= 24 ? '達到兩年回本目標' : '未達兩年目標'] : ['bad', '回不了本', '每月經營虧損'];
+  document.getElementById('kpis').innerHTML = [
+    ['fund', k1[0], '能否開業', k1[1], k1[2]],
+    ['build', '', '建造總額（全店）', wan(r.buildAll), `我方 ${wan(r.buildOurs)} · 大班廊 ${wan(r.buildTpr)}`],
+    ['pnl', r.net >= 0 ? 'good' : 'bad', '我方每月盈利（生意穩定後）', money(r.net), `入座率 ${S.p.occ}% · 每月 ${Math.round(r.guests)} 位客人`],
+    ['pay', k4[0], '回本時間', k4[1], k4[2]],
+  ].map(([id, c, l, v, s]) => `<button class="kpi ${c}" data-kpi="${id}"><div class="l"><i></i>${l}</div><div class="v">${v}</div><div class="s">${s}</div><span class="more">明細</span></button>`).join('');
+
+  // verdict
+  const msgs = [];
+  if (r.gap < 0) msgs.push(`開業時資金不足 ${wan(-r.gap)}（已計 ${S.p.reserve} 個月備用金）。`);
+  if (r.shortfall > 0) msgs.push(`開業後頭幾個月虧損，現金最低會跌到 ${wan(r.low)}。`);
+  if (r.net < 0) msgs.push(`生意穩定後每月仍虧 ${money(-r.net)}，要提高入座率、票價或減開支。`);
+  if (r.roomArea > S.p.usableArea) msgs.push(`房間面積比實用面積多 ${(r.roomArea - S.p.usableArea).toLocaleString()} 呎，要縮細。`);
+  const cls = r.toRaise > 0 || r.net < 0 ? 'bad' : msgs.length ? 'warn' : '';
+  document.getElementById('verdict').innerHTML = `<div class="verdict ${cls || 'ok'}"><span class="dot"></span><div><b>${cls === 'bad' ? (r.net < 0 ? '開業後會持續虧損' : `未能開業：還差 ${wan(r.toRaise)}`) : cls === 'warn' ? '可以開業，但要留意' : '可以開業'}</b>
+    <p>${msgs.length ? msgs.join('<br>') : '資金足夠開業，生意穩定後每月有盈利。'}</p></div></div>
+    <ul class="list"><li><span>可用資金</span><span>${money(r.funds)}</span></li><li><span>開業需要（我方）</span><span>${money(r.need)}</span></li>
+    <li><span>開業後剩餘</span><span>${money(r.gap)}</span></li><li class="k"><span>最少需要籌集</span><span>${money(r.required)}</span></li><li class="k"><span>還差</span><span>${money(r.toRaise)}</span></li></ul>`;
+
+  const allMonthly = r.siteOurs + r.siteTpr + r.staff + S.p.maint + S.p.mkt + S.p.admin + S.p.soft + S.p.misc + r.card + r.fiabFee;
+  const partners = r.partnerRent + r.partnerComm;
+  document.getElementById('whoPays').innerHTML = `<li><span>全店每月開支</span><span>${money(allMonthly)}</span></li>
+    <li><span>大班廊分擔（租金及共用雜費）</span><span>${money(r.siteTpr)}</span></li>
+    <li><span>合作品牌貢獻（櫃租及佣金）</span><span>${money(partners)}</span></li>
+    <li class="k"><span>我方實際要付</span><span>${money(allMonthly - r.siteTpr - partners)}</span></li>
+    <li><span>大班廊自己的師傅和洋服存貨</span><span>不計</span></li>`;
+  chart(r);
+  document.getElementById('occ').innerHTML = [25, 50, 75].map(o => { const x = calc({ occ: o });
+    return `<button data-occ="${o}" class="${S.p.occ === o ? 'on' : ''}"><span>${o}% 入座</span><b style="color:${x.net >= 0 ? 'var(--good)' : 'var(--bad)'}">${money(x.net)}</b><span>${x.payback ? x.payback + ' 個月回本' : '回不了本'}</span></button>`; }).join('');
+  document.querySelectorAll('#ver button').forEach(b => b.classList.toggle('on', ALL.every(i => S.it[i.id].m === b.dataset.v)));
+  document.querySelectorAll('#preset button').forEach(b => b.classList.toggle('on', Object.entries(PRESETS[b.dataset.p]).every(([k, v]) => S.p[k] === v)));
+  save();
+}
+
+function chart(r) {
+  const W = 344, H = 170, pad = { l: 46, r: 16, t: 8, b: 22 };
+  const vals = r.path, min = Math.min(0, ...vals), max = Math.max(0, ...vals), span = max - min || 1;
+  const x = i => pad.l + (W - pad.l - pad.r) * i / 36, y = v => pad.t + (H - pad.t - pad.b) * (max - v) / span;
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const ticks = [max, (max + min) / 2, min].map(v => `<text x="${pad.l - 6}" y="${y(v) + 4}" text-anchor="end">${(v / 10000).toFixed(0)}萬</text>`).join('');
+  const months = [0, 12, 24, 36].map(m => `<text x="${x(m)}" y="${H - 6}" text-anchor="middle">${m}月</text>`).join('');
+  const payX = r.payback && r.payback <= 36 ? `<line x1="${x(r.payback)}" x2="${x(r.payback)}" y1="${pad.t}" y2="${H - pad.b}" stroke="#a77a2e" stroke-dasharray="3 3"/><text x="${x(r.payback) + 4}" y="${pad.t + 10}" style="fill:#a77a2e">回本</text>` : '';
+  document.getElementById('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="現金走勢">
+    <rect x="${pad.l}" y="${y(0)}" width="${W - pad.l - pad.r}" height="${Math.max(0, H - pad.b - y(0))}" fill="#b03a2e" opacity=".06"/>
+    <line x1="${pad.l}" x2="${W - pad.r}" y1="${y(0)}" y2="${y(0)}" stroke="#9aa39c"/>${ticks}${months}${payX}
+    <polyline points="${pts}" fill="none" stroke="${r.low < 0 ? '#b03a2e' : '#1f3d2d'}" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+  document.getElementById('chartNote').textContent = `開業當日剩 ${wan(vals[0])}；最低 ${wan(r.low)}；第 36 個月 ${wan(vals[36])}。`;
+}
+
+/* ---------- details (modal) ---------- */
+function detail(id) {
+  const r = calc(), p = S.p, rows = (list) => list.map(([a, b, c]) => c === 'h' ? `<tr class="h"><td colspan="2">${a}</td></tr>` : `<tr class="${c || ''}"><td>${a}</td><td>${b}</td></tr>`).join('');
+  let h = '';
+  if (id === 'fund') h = `<h2>能否開業</h2><div class="sub">我方開業時要付的錢，對比可用資金</div><table>${rows([
+    ['資金來源', '', 'h'], ['老闆出資', money(p.boss)], ['大班廊投資', money(p.tprInvest)], ['借貸或其他', money(p.loan)],
+    [`出售 ${p.eqPct}% 股份`, money(r.eqFunds)], ['合作品牌入場費', money(r.partnerOne)], ['可用資金', money(r.funds), 't'],
+    ['開業需要（我方）', '', 'h'], ['建造費', money(r.buildOurs)], ['按金', money(r.deposit * (1 - p.shRent / 100))], ['印花稅', money(r.stampAmt * (1 - p.shRent / 100))],
+    ['代理佣金', money(r.agent * (1 - p.shRent / 100))], ['裝修期租金（扣免租期）', money(r.preRent * (1 - p.shRent / 100))], ['開業宣傳', money(p.launch)],
+    ['開業前員工薪金', money(r.preStaffAmt)], [`營運備用金（${p.reserve} 個月）`, money(r.reserveAmt)], ['合計', money(r.need), 't'],
+    ['結果', '', 'h'], ['開業後剩餘', money(r.gap)], ['開業後現金最低點', money(r.low)], ['最少需要籌集', money(r.required), 't'], ['還差', money(r.toRaise)]])}</table>`;
+  if (id === 'build') h = `<h2>建造費明細</h2><div class="sub">已計預備金；大班廊付前舖 ${p.shFront}%、共用工程 ${p.shShared}%</div><table>${rows([
+    ...r.cats.map(c => [c.cat, money(c.base)]), ['預備金', money(r.contAmt)],
+    ['全店合計', money(r.buildAll), 't'], ['大班廊分擔', money(r.buildTpr)], ['我方合計', money(r.buildOurs), 't'],
+    ['參考', '', 'h'], ['全部簡易', money(ALL.reduce((x, i) => x + itemCost(i, S.it[i.id], 's') * (1 + (i.noCont ? 0 : p.contS) / 100), 0))],
+    ['全部完整', money(ALL.reduce((x, i) => x + itemCost(i, S.it[i.id], 'c') * (1 + (i.noCont ? 0 : p.contC) / 100), 0))]])}</table>`;
+  if (id === 'pnl') h = `<h2>我方每月損益（生意穩定後）</h2><div class="sub">入座率 ${p.occ}%，每月 ${Math.round(r.guests)} 位客人</div><table>${rows([
+    ['收入', '', 'h'], ['門票', money(r.tickets)], ['精品銷售', money(r.gadgetRev)], ['合作品牌佣金', money(r.partnerComm)], ['合作品牌櫃位租金', money(r.partnerRent)],
+    ['西裝轉介佣金', money(r.referral)], ['VIP 包場', money(r.eventGross)], ['會費', money(r.member)], ['總收入', money(r.revenue), 't'],
+    ['直接成本', '', 'h'], ['精品成本', money(r.gadgetRev - r.gadgetGP)], ['包場成本', money(r.eventGross - r.eventNet)], ['刷卡及平台手續費', money(r.card)], ['體驗合作夥伴費', money(r.fiabFee)],
+    ['固定開支（我方）', '', 'h'], ...r.site.map(s => [s.n + `（大班廊付 ${money(s.t)}）`, money(s.o)]), ['員工', money(r.staff)], ['機關保養', money(p.maint)], ['宣傳', money(p.mkt)],
+    ['行政', money(p.admin)], ['軟件', money(p.soft)], ['雜項', money(p.misc)], ['固定開支合計', money(r.fixedOurs), 't'],
+    ['結果', '', 'h'], ['經營盈利（未分股東）', money(r.ebitda)], [`股東分 ${p.eqPct}%`, money(-r.investors)], ['我方每月盈利', money(r.net), 't']])}</table>`;
+  if (id === 'pay') h = `<h2>回本時間</h2><div class="sub">要賺回的錢不包按金（退租時退回）。開業頭 ${p.rampM} 個月生意由 ${p.rampStart}% 逐步升到正常。</div><table>${rows([
+    ['要賺回的投資', money(r.investedSunk)], ['生意穩定後每月盈利', money(r.net)], ['回本', r.payback ? r.payback + ' 個月' : '回不了本', 't'],
+    ['不同入座率', '', 'h'], ...[25, 40, 50, 60, 75, 90].map(o => { const x = calc({ occ: o }); return [`${o}% 入座`, `${money(x.net)} · ${x.payback ? x.payback + ' 個月' : '回不了本'}`]; }),
+    ['不同票價', '', 'h'], ...[200, 300, 400, 600].map(t => { const x = calc({ ticket: t }); return [`每位 HK$${t}`, `${money(x.net)} · ${x.payback ? x.payback + ' 個月' : '回不了本'}`]; })])}</table>`;
+  document.getElementById('dlg').innerHTML = `<button class="x" data-close>關閉</button>` + h;
+  document.getElementById('modal').hidden = false; document.getElementById('dlg').focus();
+}
+
+/* ---------- presets ---------- */
+const PRESETS = {
+  low: { occ: 30, attach: 20, slots: 8, ticket: 300, rampM: 9 },
+  base: { occ: 50, attach: 30, slots: 10, ticket: 300, rampM: 6 },
+  high: { occ: 70, attach: 40, slots: 15, ticket: 300, rampM: 4 },
+};
+
+/* ---------- events ---------- */
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.q) { S.it[t.dataset.q].q = t.checked; update(); return; }
+  if (t.type !== 'range') return;
+  const v = parseFloat(t.value);
+  if (t.dataset.k) { S.p[t.dataset.k] = v; document.getElementById('v-' + t.dataset.k).textContent = fmt(t.dataset.k, v); }
+  if (t.dataset.i) { S.it[t.dataset.i][t.dataset.f] = v; document.getElementById(`iv-${t.dataset.i}-${t.dataset.f}`).textContent = t.dataset.u !== '$' ? v.toLocaleString('en-US') + ' ' + t.dataset.u : money(v); }
+  update();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) { if (e.target.id === 'modal') document.getElementById('modal').hidden = true; return; }
+  if (b.dataset.sec) { S.open[b.dataset.sec] = !S.open[b.dataset.sec]; b.setAttribute('aria-expanded', S.open[b.dataset.sec] ? 'true' : 'false'); document.getElementById('sec-' + b.dataset.sec).classList.toggle('open'); save(); }
+  else if (b.dataset.open) document.getElementById('it-' + b.dataset.open).classList.toggle('open');
+  else if (b.dataset.m) { S.it[b.parentElement.dataset.mi].m = b.dataset.m; update(); }
+  else if (b.dataset.v) { ALL.forEach(i => S.it[i.id].m = b.dataset.v); update(); }
+  else if (b.dataset.p) { Object.assign(S.p, PRESETS[b.dataset.p]); renderSecs(); update(); }
+  else if (b.dataset.occ) { S.p.occ = +b.dataset.occ; renderSecs(); update(); }
+  else if (b.dataset.kpi) detail(b.dataset.kpi);
+  else if (b.dataset.close !== undefined) document.getElementById('modal').hidden = true;
+  else if (b.id === 'reset') { S = fresh(); renderSecs(); update(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('modal').hidden = true; });
+
+renderSecs(); update();
+</script>
+</body>
+</html>
